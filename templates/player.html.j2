@@ -15,13 +15,13 @@
       <nav class="navbar navbar-dark" :class="{ 'bg-primary': connected, 'bg-danger': !connected }">
         <a class="navbar-brand" href="#">Quizit</a>
         <span class="navbar-text">
-          !{ name } <span v-if="team">(!{ teamObj.name })</span>
+          !{ profile.name } <span v-if="profile.team">(!{ teamObj.name })</span>
           <i class="fas" :class="{ 'fa-link': connected, 'fa-unlink': !connected }"></i>
           <i style="font-family: monospace;" v-if="$socket.id">!{ $socket.id.substring(0, 4) }</i>
         </span>
       </nav>
 
-      <section id="setup" v-if="!name || !team || !ready">
+      <section id="setup" v-if="!profile.name || !profile.team || !ready">
         <div class="container">
           <h3>Welcome to Quizit!</h3>
           <p class="lead">
@@ -30,16 +30,16 @@
           </p>
           <div class="form-group">
             <label for="name">Name</label>
-            <input type="email" class="form-control" id="name" v-model="name" :disabled="ready">
+            <input type="email" class="form-control" id="name" v-model="profile.name" :disabled="ready">
           </div>
           <div class="form-group">
             <label for="team">Team</label>
-            <select class="form-control" id="team" v-model="team" :disabled="ready">
+            <select class="form-control" id="team" v-model="profile.team" :disabled="ready">
               <option v-for="team in teams" :key="team.id" :value="team.id">!{ team.name }</option>
             </select>
           </div>
           <p class="text-danger"><i class="fas fa-exclamation-triangle"></i> Once you ready, you cannot unready! Make sure that your name and team are correct.</p>
-          <button type="button" class="btn btn-lg btn-block btn-success" v-on:click="ready = true" :disabled="!name || !team"><i class="fas fa-check"></i> Ready</button>
+          <button type="button" class="btn btn-lg btn-block btn-success" v-on:click="ready = true" :disabled="!profile.name || !profile.team"><i class="fas fa-check"></i> Ready</button>
         </div>
       </section>
 
@@ -63,7 +63,7 @@
           </div>
 
           <div id="answer-choice" v-if="question.type == 'choice'">
-            <button type="button" class="btn btn-primary btn-lg btn-block" v-for="answer in question.answers">!{ answer }</button>
+            <button type="button" class="btn btn-primary btn-lg btn-block" v-for="answer in question.answers" v-on:click="submitAnswer(answer)">!{ answer }</button>
           </div>
           <div id="answer-unsupported" v-else>
             <p class="text-center text-danger lead"><i>Unsupported Question Type!</i></p>
@@ -75,8 +75,15 @@
         <div class="container">
           <h3>Sit back and relax.</h3>
           <p class="lead">A question will arrive on your device shortly...</p>
-          <p>You have <b>X points</b> and are currently in <b>Yth</b> position.</p>
-          <p>Your team has <b>X points</b> and your team is currently in <b>Yth</b> position.</p>
+
+          <div v-if="!question">
+            <p>Hello !{ profile.name }, you are in !{ teamObj.name }. <i>Incorrect? Unready below</i></p>
+            <button type="button" class="btn btn-lg btn-block btn-danger" v-on:click="ready = false"><i class="fas fa-times"></i> Unready</button>
+          </div>
+          <div v-else>
+            <p>You have <b>X points</b> and are currently in <b>Yth</b> position.</p>
+            <p>Your team has <b>X points</b> and your team is currently in <b>Yth</b> position.</p>
+          </div>
         </div>
       </section>
 
@@ -120,8 +127,11 @@
         el: '#app',
         data: {
           teams: {{ config.teams }},
-          name: "",
-          team: "",
+          profile: {
+            name: "",
+            team: ""
+          },
+          guid: "",
           ready: false,
           connected: false,
           question: false,
@@ -135,6 +145,11 @@
         sockets: {
           connect() {
             this.connected = true;
+
+            if (this.profile.name && this.profile.team) {
+              console.log("Sending ready event...");
+              this.readyEvent(this.ready);
+            }
           },
           disconnect() {
             this.connected = false;
@@ -152,9 +167,23 @@
             this.originalAnswerCountdown = data.answer_time;
             this.answerCountdown = data.answer_time;
             this.startTimer();
+          },
+          set_player(data) {
+            console.log("Fetch success!");
+            this.profile.name = data.name || this.profile.name;
+            this.profile.team = data.team || this.profile.team;
+            this.ready = data.ready || this.ready;
+            this.guid = data.guid || this.ready;
           }
         },
         methods: {
+          genGuid() {
+            function _p8(s) {
+              var p = (Math.random().toString(16)+"000000000").substr(2,8);
+              return s ? "-" + p.substr(0,4) + "-" + p.substr(4,4) : p ;
+            }
+            return _p8() + _p8(true) + _p8(true) + _p8();
+          },
           shuffle(a) {
             var j, x, i;
             for (i = a.length - 1; i > 0; i--) {
@@ -183,11 +212,52 @@
               return;
             }
             this.stopTimer();
+          },
+          submitAnswer(answer) {
+            this.$socket.emit("player_command", {
+              action: "answer",
+              answer: answer,
+              answerTime: this.answerCountdown
+            });
+            this.stopTimer();
+            this.startCountdown = -1;
+            this.answerCountdown = -1;
+          },
+          readyEvent(ready) {
+            console.log("Sending player ready event!");
+            this.$socket.emit("player_command", {
+              action: "ready",
+              ready: ready,
+              name: this.profile.name,
+              team: this.profile.team,
+              guid: this.guid
+            });
           }
         },
         computed: {
           teamObj() {
-            return this.teams.find(x => x.id == this.team);
+            return this.teams.find(x => x.id == this.profile.team);
+          }
+        },
+        watch: {
+          ready(val) {
+            this.readyEvent(val);
+          }
+        },
+        mounted() {
+          if (localStorage.guid) {
+            console.log("GUID loaded from local storage!");
+            this.guid = localStorage.guid;
+            console.log("Attempting to load state from game server...");
+            this.$socket.emit("player_command", {
+              action: "fetch",
+              guid: this.guid
+            });
+          } else {
+            var g = this.genGuid();
+            console.log("Generated new GUID " + g);
+            this.guid = g;
+            localStorage.guid = g;
           }
         }
       });

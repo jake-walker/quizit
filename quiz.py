@@ -9,7 +9,7 @@ def available_quizzes():
   output = []
   for quiz in glob.glob("quizzes/*.yaml"):
     file = open(quiz, "r")
-    data = yaml.load(file)
+    data = yaml.load(file, Loader=yaml.FullLoader)
     output.append({
       "data": data,
       "file": quiz
@@ -25,7 +25,7 @@ class Quiz():
       return
     
     self.file = quiz_path
-    self.data = yaml.load(file)
+    self.data = yaml.load(file, Loader=yaml.FullLoader)
     self._current = -1
   
   def next_question(self):

@@ -25,22 +25,27 @@
       <section id="quizzes">
         <div class="container">
           <h1>Players</h1>
+          <p>!{ readyCount } of !{ players.length } players ready.</p>
           <div class="table-responsive">
             <table class="table table-striped">
               <thead>
                 <tr>
-                  <th scope="col">#</th>
                   <th scope="col">Name</th>
                   <th scope="col">Team</th>
                   <th scope="col">Ready</th>
+                  <th scope="col">SID</th>
+                  <th scope="col">GUID</th>
+                  <th scope="col">Alive</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="player in players" :key="player">
-                  <th scope="row">!{ player }</th>
-                  <td></td>
-                  <td></td>
-                  <td></td>
+                <tr v-for="player in players" :key="player.id" :class="{ 'table-success': player.ready && player.active, 'table-danger': !player.ready && player.active, 'table-secondary': !player.active }">
+                  <td><span v-if="player.name">!{ player.name }</span></td>
+                  <td><span v-if="player.team">!{ getTeam(player.team).name }</span></td>
+                  <td><i class="fas" :class="{ 'fa-check': player.ready, 'fa-times': !player.ready }"></i> !{ player.ready ? 'Yes' : 'No' }</td>
+                  <td>!{ player.id }</td>
+                  <td><span v-if="player.guid">!{ player.guid }</span></td>
+                  <td><i class="fas" :class="{ 'fa-check': player.active, 'fa-times': !player.active }"></i> !{ player.active ? 'Yes' : 'No' }</td>
                 </tr>
               </tbody>
             </table>
@@ -88,8 +93,8 @@
               <span v-else>Question finished!</span>
             </li>
           </ul>
-          <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="nextQuestion()"><i class="fas fa-forward"></i> Next Question</button>
-          <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="startQuestion()"><i class="fas fa-stopwatch"></i> Start Countdown</button>
+          <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="nextQuestion()" :disabled="startCountdown >= 0 || answerCountdown >= 0"><i class="fas fa-forward"></i> Next Question</button>
+          <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="startQuestion()" :disabled="startCountdown >= 0 || answerCountdown >= 0"><i class="fas fa-stopwatch"></i> Start Countdown</button>
         </div>
       </section>
     </div>
@@ -117,6 +122,7 @@
         data: {
           connected: false,
           quizzes: {{ quizzes }},
+          teams: {{ config.teams }},
           quiz: false,
           players: [],
           startCountdown: -1,
@@ -155,6 +161,9 @@
           }
         },
         methods: {
+          getTeam(id) {
+            return this.teams.find(x => x.id == id);
+          },
           loadQuiz(filename) {
             this.$socket.emit("admin_command", {
               action: "load_quiz",
@@ -189,6 +198,11 @@
               return;
             }
             this.stopTimer();
+          }
+        },
+        computed: {
+          readyCount() {
+            return this.players.filter(x => x.ready).length;
           }
         }
       });

@@ -23,10 +23,11 @@ def player():
 @app.route("/admin")
 def admin():
   quizzes = quiz.available_quizzes()
-  return render_template("admin.html.j2", quizzes=quizzes)
+  return render_template("admin.html.j2", quizzes=quizzes, config=config)
 
 @socketio.on("connect")
 def player_connect():
+  global players
   q = parse_qs(request.query_string)
   q = {key.decode("utf-8"): value[0].decode("utf-8") for (key, value) in q.items()}
   admin = False
@@ -35,7 +36,14 @@ def player_connect():
       join_room("admin")
       admin = True
   else:
-    players.append(request.sid)
+    players.append({
+      "id": request.sid,
+      "active": True,
+      "name": "",
+      "team": "",
+      "ready": False,
+      "guid": ""
+    })
     if (current_quiz != None):
       broadcast_next_question(current_quiz.current_question(), broadcast=False)
   print("=== {} {} connected! ===".format("Admin" if admin else "Player", request.sid))
@@ -43,11 +51,14 @@ def player_connect():
 
 @socketio.on("disconnect")
 def player_disconnect():
-  if request.sid in players:
-    players.remove(request.sid)
+  global players
+  player_index = next((i for (i, x) in enumerate(players) if x["id"] == request.sid), None)
+  if (player_index != None):
+    players[player_index]["active"] = False
   print("Player disconnected!")
   status_update()
 
+# TODO: Make sure that this only accepts messages from admins.
 @socketio.on("admin_command")
 def admin_command_event(json):
   global current_quiz
@@ -69,6 +80,44 @@ def admin_command_event(json):
     broadcast_start_question()
   status_update()
   print("Received command " + str(json))
+
+@socketio.on("player_command")
+def player_command_event(json):
+  global current_quiz
+  global players
+  if (json["action"] == "ready"):
+    player_index = next((i for (i, x) in enumerate(players) if x["id"] == request.sid), None)
+    if (player_index != None):
+      players[player_index]["name"] = json["name"]
+      players[player_index]["team"] = json["team"]
+      players[player_index]["ready"] = json["ready"]
+      players[player_index]["guid"] = json["guid"]
+      players[player_index]["active"] = True
+    # Send a status update to the admin dashboard
+    status_update()
+  # This 'recovers' a game session (e.g if a user disconnects)
+  elif (json["action"] == "fetch"):
+    # Get the player with the same GUID
+    player_index = next((i for (i, x) in enumerate(players) if x["guid"] == json["guid"]), None)
+    # If we could find a player with the same GUID
+    if (player_index != None):
+      # Get the 'old' player object
+      old_player_index = next((i for (i, x) in enumerate(players) if x["id"] == request.sid), None)
+      # Delete the object
+      if (old_player_index != None):
+        del players[old_player_index]
+      # Update the player's ID to the current socket ID
+      players[player_index]["id"] = request.sid
+      # Send all the details to update client
+      emit("set_player", players[player_index])
+  elif (json["action"] == "answer"):
+    print(str(request.sid) + " answered " + str(json["answer"]) + " in " + str(json["answerTime"]) + "seconds")
+    if (json["answer"] == current_quiz.current_question.correct):
+      print("CORRECT!")
+    else:
+      print("Correct answer was " + current_quiz.current_question.correct)
+  else:
+    print(json["action"], json)
 
 def broadcast_next_question(question, broadcast=True):
   if isinstance(question, dict):
