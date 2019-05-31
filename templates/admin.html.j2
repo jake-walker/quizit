@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/all.css') }}">
+
+    <title>Quiz Master | Quizit</title>
+  </head>
+  <body>
+    <div id="app">
+      <section id="status">
+        <div class="container">
+          <h1>Status</h1>
+          <ul>
+            <li><b>Connection Status:</b> !{ connected ? 'Connected' : 'Disconnected' }</li>
+            <li><b>Connection ID:</b> <code>!{ $socket.id }</code></li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="quizzes">
+        <div class="container">
+          <h1>Players</h1>
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Team</th>
+                  <th scope="col">Ready</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="player in players" :key="player">
+                  <th scope="row">!{ player }</th>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="quizzes">
+        <div class="container">
+          <h1>Quizzes</h1>
+          <ul>
+            <li><b>Current Quiz:</b> !{ quiz ? quiz.data.name+' ('+quiz.path+')' : 'No Quiz' }</li>
+          </ul>
+          <div class="btn-group mb-3" role="group">
+            <button class="btn btn-secondary" v-on:click="loadQuiz()" :disabled="!quiz"><i class="fas fa-times"></i> Unload</button>
+          </div>
+          <div class="card mb-3" :class="{ 'text-white': quiz.path == q.file, 'bg-success': quiz.path == q.file }" v-for="q in quizzes" :key="q.file">
+            <div class="card-body">
+              <h5 class="card-title">!{ q.data.name }</h5>
+              <h6 class="card-subtitle mb-2 text-muted">!{ q.data.questions.length } questions</h6>
+              <ul>
+                <li><b>File:</b> !{ q.file }</li>
+              </ul>
+              <button class="btn btn-primary" v-on:click="loadQuiz(q.file)" :disabled="quiz.path == q.file">Load Quiz</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="control" v-if="quiz">
+        <div class="container">
+          <h1>Control</h1>
+          <ul v-if="quiz.question == 'start' || quiz.question == 'finish'">
+            <li><b>Position:</b> !{ quiz.question == 'start' ? '0' : quiz.data.questions.length } of !{ quiz.data.questions.length }</li>
+            <b class="text-info">It is the !{ quiz.question } of the quiz!</b>
+          </ul>
+          <ul v-else>
+            <li><b>Position:</b> !{ quiz.position } of !{ quiz.data.questions.length }</li>
+            <li><b>Question:</b> !{ quiz.question.prompt }</li>
+            <li><b>Answers:</b> !{ quiz.question.answers }</li>
+            <li>
+              <b>Countdown:</b>
+              <span v-if="startCountdown >= 0">!{ startCountdown } seconds to prepare!</span>
+              <span v-else-if="answerCountdown >= 0">!{ answerCountdown } seconds to answer!</span>
+              <span v-else>Question finished!</span>
+            </li>
+          </ul>
+          <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="nextQuestion()"><i class="fas fa-forward"></i> Next Question</button>
+          <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="startQuestion()"><i class="fas fa-stopwatch"></i> Start Countdown</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/jquery-3.3.1.slim.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/vue.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/es6-promise.auto.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/vue-socketio.js') }}"></script>
+    <script>
+      Vue.use(new VueSocketIO({
+        debug: true,
+        connection: "http://" + document.domain + ":" + location.port,
+        options: {
+          query: {
+            token: "testing123"
+          }
+        }
+      }));
+
+      var app = new Vue({
+        delimiters: ["!{", "}"],
+        el: '#app',
+        data: {
+          connected: false,
+          quizzes: {{ quizzes }},
+          quiz: false,
+          players: [],
+          startCountdown: -1,
+          answerCountdown: -1,
+          timer: null
+        },
+        sockets: {
+          connect: function() {
+            this.connected = true;
+          },
+          disconnect: function() {
+            this.connected = false;
+          },
+          "admin_status": function(data) {
+            console.log("Received status update", data);
+
+            this.players = data.players;
+
+            if (data.quiz == false) {
+              this.quiz = false;
+              return;
+            } else if (this.quiz == false) {
+              this.quiz = {};
+            }
+
+            this.$set(this.quiz, "data", data.quiz);
+            this.$set(this.quiz, "path", data.quiz_path);
+            this.$set(this.quiz, "question", data.question);
+            this.$set(this.quiz, "position", data.question_position);
+          },
+          "start_question": function(data) {
+            console.log("SQ", data);
+            this.startCountdown = data.start_time;
+            this.answerCountdown = data.answer_time;
+            this.startTimer();
+          }
+        },
+        methods: {
+          loadQuiz(filename) {
+            this.$socket.emit("admin_command", {
+              action: "load_quiz",
+              filename: filename
+            });
+          },
+          nextQuestion() {
+            this.$socket.emit("admin_command", {
+              action: "next_question"
+            });
+          },
+          startQuestion() {
+            this.$socket.emit("admin_command", {
+              action: "start_question"
+            });
+          },
+          startTimer() {
+            this.timer = setInterval(() => this.countdown(), 1000);
+          },
+          stopTimer() {
+            clearInterval(this.timer);
+            this.timer = null;
+          },
+          countdown() {
+            if (!this.timer) return;
+            if (this.startCountdown >= 0) {
+              this.startCountdown--;
+              return;
+            }
+            if (this.answerCountdown >= 0) {
+              this.answerCountdown--;
+              return;
+            }
+            this.stopTimer();
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

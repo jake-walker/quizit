@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/all.css') }}">
+
+    <title>Quizit</title>
+  </head>
+  <body>
+    <div id="app">
+      <nav class="navbar navbar-dark" :class="{ 'bg-primary': connected, 'bg-danger': !connected }">
+        <a class="navbar-brand" href="#">Quizit</a>
+        <span class="navbar-text">
+          !{ name } <span v-if="team">(!{ teamObj.name })</span>
+          <i class="fas" :class="{ 'fa-link': connected, 'fa-unlink': !connected }"></i>
+          <i style="font-family: monospace;" v-if="$socket.id">!{ $socket.id.substring(0, 4) }</i>
+        </span>
+      </nav>
+
+      <section id="setup" v-if="!name || !team || !ready">
+        <div class="container">
+          <h3>Welcome to Quizit!</h3>
+          <p class="lead">
+            To get started, you will need to tell us your name and what group you are in. Make sure that you use a name that
+            other people will know you as. Once you've done that, hit the ready button.
+          </p>
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input type="email" class="form-control" id="name" v-model="name" :disabled="ready">
+          </div>
+          <div class="form-group">
+            <label for="team">Team</label>
+            <select class="form-control" id="team" v-model="team" :disabled="ready">
+              <option v-for="team in teams" :key="team.id" :value="team.id">!{ team.name }</option>
+            </select>
+          </div>
+          <p class="text-danger"><i class="fas fa-exclamation-triangle"></i> Once you ready, you cannot unready! Make sure that your name and team are correct.</p>
+          <button type="button" class="btn btn-lg btn-block btn-success" v-on:click="ready = true" :disabled="!name || !team"><i class="fas fa-check"></i> Ready</button>
+        </div>
+      </section>
+
+      <section id="countdown" v-else-if="startCountdown >= 0">
+        <div class="container">
+          <p class="lead">Here is the question for the next round. Have a read before the answers come up.</p>
+          <h3>!{ question.prompt }</h3>
+          <div class="progress" style="height: 30px;" v-if="originalStartCountdown >= 0">
+            <div class="progress-bar bg-primary" role="progressbar" :style="'width: ' + ((startCountdown / originalStartCountdown) * 100) + '%;'">!{ startCountdown } seconds left!</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="question" v-else-if="answerCountdown >= 0 && startCountdown < 0">
+        <div class="container">
+          <h3>!{ question.prompt }</h3>
+          <p class="lead">Pick an answer below. You have !{ answerCountdown } seconds left to choose.</p>
+
+          <div class="progress mb-4 mt-4">
+            <div class="progress-bar bg-secondary" role="progressbar" :style="'width: ' + ((answerCountdown / originalAnswerCountdown) * 100) + '%;'">!{ answerCountdown <= 0 ? '0' : answerCountdown } seconds left!</div>
+          </div>
+
+          <div id="answer-choice" v-if="question.type == 'choice'">
+            <button type="button" class="btn btn-primary btn-lg btn-block" v-for="answer in question.answers">!{ answer }</button>
+          </div>
+          <div id="answer-unsupported" v-else>
+            <p class="text-center text-danger lead"><i>Unsupported Question Type!</i></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="idle" v-else>
+        <div class="container">
+          <h3>Sit back and relax.</h3>
+          <p class="lead">A question will arrive on your device shortly...</p>
+          <p>You have <b>X points</b> and are currently in <b>Yth</b> position.</p>
+          <p>Your team has <b>X points</b> and your team is currently in <b>Yth</b> position.</p>
+        </div>
+      </section>
+
+      <section id="status">
+        <div class="container">
+          <h1>Status</h1>
+          <ul>
+            <li><b>Connection Status:</b> !{ connected ? 'Connected' : 'Disconnected' }</li>
+            <li><b>Connection ID:</b> <code>!{ $socket.id }</code></li>
+            <li><b>Question:</b> <i v-if="!question">n/a</i></li>
+            <ul v-if="question">
+              <li><b>Type:</b> !{ question.type }</li>
+              <li><b>Prompt:</b> !{ question.prompt }</li>
+              <li><b>Answers:</b> !{ question.answers }</li>
+              <li>
+                <b>Countdown:</b>
+                <span v-if="startCountdown >= 0">!{ startCountdown } seconds to prepare!</span>
+                <span v-else-if="answerCountdown >= 0">!{ answerCountdown } seconds to answer!</span>
+                <span v-else>Question finished!</span>
+              </li>
+            </ul>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/jquery-3.3.1.slim.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/vue.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/es6-promise.auto.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/vue-socketio.js') }}"></script>
+    <script>
+      Vue.use(new VueSocketIO({
+        debug: true,
+        connection: "http://" + document.domain + ":" + location.port
+      }));
+
+      var app = new Vue({
+        delimiters: ["!{", "}"],
+        el: '#app',
+        data: {
+          teams: {{ config.teams }},
+          name: "",
+          team: "",
+          ready: false,
+          connected: false,
+          question: false,
+          startCountdown: -1,
+          originalStartCountdown: -1,
+          answerCountdown: -1,
+          originalAnswerCountdown: -1,
+          timer: null,
+          navStatus: 0
+        },
+        sockets: {
+          connect() {
+            this.connected = true;
+          },
+          disconnect() {
+            this.connected = false;
+          },
+          next_question(data) {
+            if (this.question == false) this.question = {};
+            this.$set(this.question, "prompt", data.prompt);
+            this.$set(this.question, "answers", this.shuffle(data.answers));
+            this.$set(this.question, "type", data.type);
+          },
+          start_question(data) {
+            console.log("SQ", data);
+            this.originalStartCountdown = data.start_time;
+            this.startCountdown = data.start_time;
+            this.originalAnswerCountdown = data.answer_time;
+            this.answerCountdown = data.answer_time;
+            this.startTimer();
+          }
+        },
+        methods: {
+          shuffle(a) {
+            var j, x, i;
+            for (i = a.length - 1; i > 0; i--) {
+                j = Math.floor(Math.random() * (i + 1));
+                x = a[i];
+                a[i] = a[j];
+                a[j] = x;
+            }
+            return a;
+          },
+          startTimer() {
+            this.timer = setInterval(() => this.countdown(), 1000);
+          },
+          stopTimer() {
+            clearInterval(this.timer);
+            this.timer = null;
+          },
+          countdown() {
+            if (!this.timer) return;
+            if (this.startCountdown >= 0) {
+              this.startCountdown--;
+              return;
+            }
+            if (this.answerCountdown >= 0) {
+              this.answerCountdown--;
+              return;
+            }
+            this.stopTimer();
+          }
+        },
+        computed: {
+          teamObj() {
+            return this.teams.find(x => x.id == this.team);
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+name: "Test Quiz"
+questions:
+  - type: choice
+    prompt: A is the correct answer (1)
+    answers: [A, B, C, D]
+    correct: A
+  - type: choice
+    prompt: C is the correct answer (2)
+    answers: [A, B, C, D]
+    correct: C
+  - type: choice
+    prompt: B is the correct answer (3)
+    answers: [A, B, C, D]
+    correct: B
