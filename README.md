@@ -6,6 +6,21 @@ Quizit is designed to be run on a laptop or single board computer. Each of the p
 
 Quizit was originally made for an event in less than a week. The venue didn't have internet and we wanted to still have a 'Kahoot-like' quiz.
 
+## Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/jake-walker/quizit
+# Install pipenv if you haven't already
+sudo python3 -m pip install pipenv
+# Install dependencies
+pipenv install
+# Run Quizit
+pipenv run python3 index.py
+# Join the quiz at https://localhost:5000/ (or at the computer's IP)
+#   administrate the quiz at https://localhost:5000/admin (or at the computer's IP)
+```
+
 ## Issues
 
 This is definitely not perfect code so you should expect bugs and big issues. Some of the problems at the moment are:
