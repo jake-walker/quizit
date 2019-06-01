@@ -32,6 +32,7 @@
                 <tr>
                   <th scope="col">Name</th>
                   <th scope="col">Team</th>
+                  <th scope="col">Score</th>
                   <th scope="col">Ready</th>
                   <th scope="col">SID</th>
                   <th scope="col">GUID</th>
@@ -42,6 +43,7 @@
                 <tr v-for="player in players" :key="player.id" :class="{ 'table-success': player.ready && player.active, 'table-danger': !player.ready && player.active, 'table-secondary': !player.active }">
                   <td><span v-if="player.name">!{ player.name }</span></td>
                   <td><span v-if="player.team">!{ getTeam(player.team).name }</span></td>
+                  <td><span v-if="player.score">!{ player.score }</span></td>
                   <td><i class="fas" :class="{ 'fa-check': player.ready, 'fa-times': !player.ready }"></i> !{ player.ready ? 'Yes' : 'No' }</td>
                   <td>!{ player.id }</td>
                   <td><span v-if="player.guid">!{ player.guid }</span></td>
@@ -95,6 +97,53 @@
           </ul>
           <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="nextQuestion()" :disabled="startCountdown >= 0 || answerCountdown >= 0"><i class="fas fa-forward"></i> Next Question</button>
           <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="startQuestion()" :disabled="startCountdown >= 0 || answerCountdown >= 0"><i class="fas fa-stopwatch"></i> Start Countdown</button>
+          <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="showAnswerFeedback()" :disabled="startCountdown >= 0 || answerCountdown >= 0"><i class="fas fa-question"></i> Show Feedback</button>
+        </div>
+      </section>
+
+      <section id="leaderboards" v-if="quiz">
+        <div class="container">
+          <h1>Leaderboards</h1>
+
+          <button class="btn btn-outline-primary btn-lg btn-block" v-on:click="fetchLeaderboard()"><i class="fas fa-download"></i> Fetch Leaderboard</button>
+
+          <h4>Players</h4>
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Name</th>
+                <th scope="col">Team</th>
+                <th scope="col">Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(player, index) in leaderboard.player">
+                <th scope="row">!{ index + 1 | ordinal }</th>
+                <td>!{ player.name }</td>
+                <td><span v-if="player.team">!{ getTeam(player.team).name }</span></td>
+                <td>!{ player.score }</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h4>Teams</h4>
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Team</th>
+                <th scope="col">Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(team, index) in leaderboard.team">
+                <th scope="row">!{ index + 1 | ordinal }</th>
+                <td>!{ getTeam(team.team).name }</td>
+                <td>!{ team.score }</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
@@ -127,7 +176,11 @@
           players: [],
           startCountdown: -1,
           answerCountdown: -1,
-          timer: null
+          timer: null,
+          leaderboard: {
+            player: [],
+            team: []
+          }
         },
         sockets: {
           connect: function() {
@@ -158,9 +211,17 @@
             this.startCountdown = data.start_time;
             this.answerCountdown = data.answer_time;
             this.startTimer();
+          },
+          leaderboard(data) {
+            this.leaderboard = data;
           }
         },
         methods: {
+          fetchLeaderboard() {
+            this.$socket.emit("player_command", {
+              action: "leaderboard"
+            });
+          },
           getTeam(id) {
             return this.teams.find(x => x.id == id);
           },
@@ -186,6 +247,8 @@
           stopTimer() {
             clearInterval(this.timer);
             this.timer = null;
+
+            this.fetchLeaderboard();
           },
           countdown() {
             if (!this.timer) return;
@@ -198,11 +261,33 @@
               return;
             }
             this.stopTimer();
+          },
+          showAnswerFeedback() {
+            this.$socket.emit("admin_command", {
+              action: "show_feedback"
+            });
           }
         },
         computed: {
           readyCount() {
             return this.players.filter(x => x.ready).length;
+          }
+        },
+        filters: {
+          ordinal: function(i) {
+            if (!i) return "";
+            var j = i % 10,
+            k = i % 100;
+            if (j == 1 && k != 11) {
+                return i + "st";
+            }
+            if (j == 2 && k != 12) {
+                return i + "nd";
+            }
+            if (j == 3 && k != 13) {
+                return i + "rd";
+            }
+            return i + "th";
           }
         }
       });

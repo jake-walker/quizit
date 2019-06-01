@@ -5,6 +5,7 @@ import quiz
 from urllib.parse import parse_qs
 import time
 import config as cfg
+import math
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret!"
@@ -42,7 +43,8 @@ def player_connect():
       "name": "",
       "team": "",
       "ready": False,
-      "guid": ""
+      "guid": "",
+      "score": 0
     })
     if (current_quiz != None):
       broadcast_next_question(current_quiz.current_question(), broadcast=False)
@@ -77,7 +79,13 @@ def admin_command_event(json):
     if (q != "finish"):
       broadcast_next_question(q)
   elif (json["action"] == "start_question"):
-    broadcast_start_question()
+    q = current_quiz.current_question()
+    print(q)
+    broadcast_start_question(answer_time=q["time"])
+  elif (json["action"] == "show_feedback"):
+    emit("answer_feedback", {
+      "show": True
+    }, broadcast=True)
   status_update()
   print("Received command " + str(json))
 
@@ -112,12 +120,68 @@ def player_command_event(json):
       emit("set_player", players[player_index])
   elif (json["action"] == "answer"):
     print(str(request.sid) + " answered " + str(json["answer"]) + " in " + str(json["answerTime"]) + "seconds")
-    if (json["answer"] == current_quiz.current_question.correct):
-      print("CORRECT!")
+    score = 0
+    q = current_quiz.current_question()
+    if (json["answer"] == q["correct"]):
+      # Base score
+      score += q["score"]
+      # Time score
+      time_score = math.ceil((int(json["answerTime"]) / q["time"]) * 10)
+      score += time_score
+
+      player_index = next((i for (i, x) in enumerate(players) if x["id"] == request.sid), None)
+      players[player_index]["score"] += score
+
+      emit("answer_feedback", {
+        "correct": True,
+        "score": score
+      })
     else:
-      print("Correct answer was " + current_quiz.current_question.correct)
+      emit("answer_feedback", {
+        "correct": False,
+        "score": 0
+      })
+  elif (json["action"] == "leaderboard"):
+    # TODO: Only send points, position and person/team infront and behind.
+    player = player_leaderboard()
+    team = team_leaderboard()
+    emit("leaderboard", {
+      "player": player,
+      "team": team
+    })
   else:
     print(json["action"], json)
+
+def player_leaderboard():
+  global players
+
+  temp = []
+
+  for player in players:
+    if (player["active"] and player["ready"]):
+      temp.append(player)
+
+  return sorted(temp, key=lambda p: p["score"], reverse=True)
+
+def team_leaderboard():
+  global players
+  leaderboard = {}
+  for player in players:
+    if (player["active"] and player["ready"]):
+      if (player["team"] in leaderboard):
+        leaderboard[player["team"]] += player["score"]
+      else:
+        leaderboard[player["team"]] = player["score"]
+  
+  output = []
+
+  for key, value in leaderboard.items():
+    output.append({
+      "team": key,
+      "score": value
+    })
+  
+  return sorted(output, key=lambda t: t["score"], reverse=True)
 
 def broadcast_next_question(question, broadcast=True):
   if isinstance(question, dict):
@@ -128,6 +192,7 @@ def broadcast_next_question(question, broadcast=True):
     }, broadcast=broadcast)
 
 def broadcast_start_question(start_time=5, answer_time=20):
+  print("Starting question with " + str(start_time) + " seconds prep and " + str(answer_time) + " seconds answering time.")
   emit("start_question", {
     "start_time": start_time,
     "answer_time": answer_time

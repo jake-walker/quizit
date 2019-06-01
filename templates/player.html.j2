@@ -76,13 +76,19 @@
           <h3>Sit back and relax.</h3>
           <p class="lead">A question will arrive on your device shortly...</p>
 
+          <div class="alert" :class="{ 'alert-success': feedback.correct, 'alert-danger': !feedback.correct }" role="alert" v-if="showFeedback">
+            <span v-if="feedback.correct"><i class="fas fa-check"></i> Congrats! You got the last question correct and scored <b>!{ feedback.score }</b> points!</span>
+            <span v-else><i class="fas fa-times"></i> Aww! You got the last question wrong.</span>
+          </div>
+
+          <div v-if="showFeedback">
+            <p>You have <b>!{ currentPlayerPoints } points</b> and are currently in <b>!{ currentPlayerPosition | ordinal }</b> position.</p>
+            <p>Your team has <b>!{ currentTeamPoints } points</b> and your team is currently in <b>!{ currentTeamPosition | ordinal }</b> position.</p>
+          </div>
+
           <div v-if="!question">
             <p>Hello !{ profile.name }, you are in !{ teamObj.name }. <i>Incorrect? Unready below</i></p>
             <button type="button" class="btn btn-lg btn-block btn-danger" v-on:click="ready = false"><i class="fas fa-times"></i> Unready</button>
-          </div>
-          <div v-else>
-            <p>You have <b>X points</b> and are currently in <b>Yth</b> position.</p>
-            <p>Your team has <b>X points</b> and your team is currently in <b>Yth</b> position.</p>
           </div>
         </div>
       </section>
@@ -140,7 +146,17 @@
           answerCountdown: -1,
           originalAnswerCountdown: -1,
           timer: null,
-          navStatus: 0
+          navStatus: 0,
+          feedback: {
+            correct: false,
+            score: 0
+          },
+          showFeedback: false,
+          showLeaderboard: false,
+          leaderboard: {
+            player: [],
+            team: []
+          }
         },
         sockets: {
           connect() {
@@ -159,6 +175,7 @@
             this.$set(this.question, "prompt", data.prompt);
             this.$set(this.question, "answers", this.shuffle(data.answers));
             this.$set(this.question, "type", data.type);
+            this.showFeedback = false;
           },
           start_question(data) {
             console.log("SQ", data);
@@ -174,9 +191,25 @@
             this.profile.team = data.team || this.profile.team;
             this.ready = data.ready || this.ready;
             this.guid = data.guid || this.ready;
+          },
+          answer_feedback(data) {
+            if (data.show) {
+              this.showFeedback = true;
+              this.fetchLeaderboard();
+            } else {
+              this.feedback = data;
+            }
+          },
+          leaderboard(data) {
+            this.leaderboard = data;
           }
         },
         methods: {
+          fetchLeaderboard() {
+            this.$socket.emit("player_command", {
+              action: "leaderboard"
+            })
+          },
           genGuid() {
             function _p8(s) {
               var p = (Math.random().toString(16)+"000000000").substr(2,8);
@@ -232,11 +265,32 @@
               team: this.profile.team,
               guid: this.guid
             });
+          },
+          teamInfo(id) {
+            return this.teams.find(x => x.id == id);
           }
         },
         computed: {
           teamObj() {
-            return this.teams.find(x => x.id == this.profile.team);
+            return this.teamInfo(this.profile.team);
+          },
+          currentPlayerPoints() {
+            var player = this.leaderboard.player.find(x => x.guid == this.guid);
+            return (player ? player.score : 0);
+          },
+          currentPlayerPosition() {
+            var player = this.leaderboard.player.find(x => x.guid == this.guid);
+            var position = this.leaderboard.player.indexOf(player);
+            return position + 1;
+          },
+          currentTeamPoints() {
+            var team = this.leaderboard.team.find(x => x.team == this.profile.team);
+            return (team ? team.score : 0);
+          },
+          currentTeamPosition() {
+            var team = this.leaderboard.team.find(x => x.team == this.profile.team);
+            var position = this.leaderboard.team.indexOf(team);
+            return position + 1;
           }
         },
         watch: {
@@ -258,6 +312,23 @@
             console.log("Generated new GUID " + g);
             this.guid = g;
             localStorage.guid = g;
+          }
+        },
+        filters: {
+          ordinal: function(i) {
+            if (!i) return "";
+            var j = i % 10,
+            k = i % 100;
+            if (j == 1 && k != 11) {
+                return i + "st";
+            }
+            if (j == 2 && k != 12) {
+                return i + "nd";
+            }
+            if (j == 3 && k != 13) {
+                return i + "rd";
+            }
+            return i + "th";
           }
         }
       });
