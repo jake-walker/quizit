@@ -1,0 +1,107 @@
+name: "General Knowledge"
+questions:
+  - type: choice
+    prompt: Other than red strawberries, what other colour colour strawberry can you find?
+    answers:
+      - White
+      - Black
+      - Yellow
+    correct: White
+    score: 5
+    time: 10
+  - type: choice
+    prompt: "True or False: Glow Worm caves exist in New Zealand."
+    answers:
+      - "True"
+      - "False"
+    correct: "True"
+    score: 5
+    time: 10
+  - type: choice
+    prompt: "True or False: A single arm of a starfish can regenerate it's whole body."
+    answers:
+      - "True"
+      - "False"
+    correct: "True"
+    score: 5
+    time: 10
+  - type: choice
+    prompt: Which of these shares 50% of the same DNA as humans?
+    answers:
+      - Mice
+      - Pigs
+      - Bananas
+      - Gorillas
+    correct: Bananas
+    score: 5
+    time: 10
+  - type: choice
+    prompt: "What was the date of Donald Trump's inaugration?"
+    answers:
+      - "19th January 2016"
+      - "19th January 2017"
+      - "20th February 2017"
+      - "20th January 2017"
+    correct: Bananas
+    score: 5
+    time: 10
+  - type: choice
+    prompt: How many keys are on a standard computer keyboard?
+    answers:
+      - "101"
+      - "109"
+      - "120"
+      - "98"
+    correct: "101"
+    score: 5
+    time: 10
+  - type: choice
+    prompt: How many keys are on a standard computer keyboard?
+    answers:
+      - "101"
+      - "109"
+      - "120"
+      - "98"
+    correct: "101"
+    score: 5
+    time: 10
+  - type: choice
+    prompt: How many books are there in the New Testament?
+    answers:
+      - "20"
+      - "27"
+      - "39"
+      - "42"
+    correct: "27"
+    score: 5
+    time: 10
+  - type: choice
+    prompt: What was the full name of the Barbie Doll?
+    answers:
+      - "Barbara Crystal Evans"
+      - "Brooke Diamond Childs"
+      - "Brooke Pink Jones"
+      - "Barbara Millicent Roberts"
+    correct: "Barbara Millicent Roberts"
+    score: 5
+    time: 10
+  - type: choice
+    prompt: What was the full name of the Barbie Doll?
+    answers:
+      - "Barbara Crystal Evans"
+      - "Brooke Diamond Childs"
+      - "Brooke Pink Jones"
+      - "Barbara Millicent Roberts"
+    correct: "Barbara Millicent Roberts"
+    score: 5
+    time: 10
+  - type: choice
+    prompt: Who has the most subscribers out of these YouTube music channels?
+    answers:
+      - "EminemMusic"
+      - "Justin Bieber"
+      - "Katy Perry"
+      - "Ed Sheeran"
+    correct: "Justin Bieber"
+    score: 5
+    time: 10
